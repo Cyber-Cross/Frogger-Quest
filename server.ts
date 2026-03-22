@@ -6,10 +6,16 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  if (!process.env.NODE_ENV) {
+    process.env.NODE_ENV = 'development';
+  }
+
   // API routes (placeholder for high scores)
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
+
+  console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
