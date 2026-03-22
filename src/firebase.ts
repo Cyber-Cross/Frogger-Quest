@@ -2,8 +2,29 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, getDocFromServer, Timestamp } from 'firebase/firestore';
 
-// Import the Firebase configuration
-import firebaseConfig from '../firebase-applet-config.json';
+// Firebase configuration from environment variables
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID,
+};
+
+// Check for missing configuration
+const missingKeys = Object.entries(firebaseConfig)
+  .filter(([key, value]) => !value && key !== 'measurementId')
+  .map(([key]) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}`);
+
+if (missingKeys.length > 0) {
+  console.error(
+    "Firebase configuration is missing the following environment variables:\n" +
+    missingKeys.join("\n") +
+    "\n\nPlease add these to your AI Studio Settings > Secrets."
+  );
+}
 
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
