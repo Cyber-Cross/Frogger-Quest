@@ -912,7 +912,10 @@ function Game() {
       </div>
 
       {/* Game Board */}
-      <div className="relative bg-stone-900 rounded-2xl shadow-2xl border border-stone-800 min-h-[520px] flex items-center justify-center w-full max-w-[95vw] md:max-w-none overflow-x-auto">
+      <div className={cn(
+        "relative bg-stone-900 rounded-2xl shadow-2xl border border-stone-800 min-h-[520px] flex items-center justify-center w-full max-w-[95vw] md:max-w-none",
+        gameState === 'playing' ? "overflow-x-auto" : "overflow-x-hidden"
+      )}>
         <div 
           className="relative transition-all duration-500 shrink-0 overflow-hidden"
           style={{ 
