@@ -1,0 +1,5 @@
+{
+  "name": "Frogger Quest",
+  "description": "A 2D Frogger-style game with levels, power-ups, and global high scores.",
+  "requestFramePermissions": []
+}

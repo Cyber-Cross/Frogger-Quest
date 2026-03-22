@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required, immutable) - The unique ID of the user.
+    //   - displayName: string (required) - The user's display name.
+    //   - photoURL: string (optional) - The user's profile picture URL.
+    //   - email: string (required) - The user's email address.
+    //   - createdAt: timestamp (required, immutable) - When the user profile was created.
+    //
+    // Collection: highscores
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required, immutable) - The unique ID of the player.
+    //   - displayName: string (required) - The player's display name.
+    //   - photoURL: string (optional) - The player's profile picture URL.
+    //   - score: number (required) - The high score achieved (must be positive).
+    //   - level: number (required) - The level reached (must be positive).
+    //   - updatedAt: timestamp (required) - When the high score was last updated.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.size() == 0 || url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "mbran34@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'email', 'createdAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidUrl(data.photoURL) &&
+             data.email is string && isValidEmail(data.email) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidHighScore(data) {
+      return hasOnlyAllowedFields(['uid', 'displayName', 'photoURL', 'score', 'level', 'updatedAt']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
+             data.score is number && data.score >= 0 &&
+             data.level is number && data.level >= 1 &&
+             data.updatedAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /highscores/{userId} {
+      allow read: if true; // Leaderboard is public
+      allow create: if isOwner(userId) && isValidHighScore(request.resource.data);
+      allow update: if isOwner(userId) && isValidHighScore(request.resource.data) &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.score >= resource.data.score; // Only allow updating to a higher or equal score
+    }
+  }
+}

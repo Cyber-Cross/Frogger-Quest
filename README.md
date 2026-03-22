@@ -1,39 +1,20 @@
-🐸 Frogger Quest
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-Frogger Quest is a modern, 2D arcade-style game built using React and Google AI Studio. Navigate your frog through treacherous roads and rushing rivers to reach safety!
+# Run and deploy your AI Studio app
 
-🎮 How to Play
+This contains everything you need to run your app locally.
 
-The objective is simple: get to the goal at the top of the screen without losing all your lives.
+View your app in AI Studio: https://ai.studio/apps/f8e538af-3402-4518-8f29-7eea766deb1c
 
-Move: Use the Arrow Keys or WASD (Up, Down, Left, Right) to hop.
+## Run Locally
 
-Avoid: Don't get hit by cars or trucks on the road!
+**Prerequisites:**  Node.js
 
-Survive: In the river section, hop on moving logs to stay afloat. Touching the water will reset your position.
 
-Win: Reach the "Goal" zone at the top to increase your score.
-
-✨ Features
-
-Classic Mechanics: Grid-based movement inspired by the original 1981 arcade hit.
-
-Dynamic Difficulty: Watch out—the traffic speed increases as your score goes up.
-
-Life System: You start with 3 lives. Use them wisely!
-
-Responsive Design: Playable on various screen sizes with a clean, retro UI.
-
-High Score Tracking: Your best runs are saved via local storage.
-
-🛠️ Tech Stack
-
-Framework: Next.js / React
-
-Styling: Tailwind CSS
-
-Animations: Framer Motion
-
-📜 License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

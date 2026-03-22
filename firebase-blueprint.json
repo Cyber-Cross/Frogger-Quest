@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about a registered user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "photoURL": { "type": "string", "description": "The user's profile picture URL." },
+        "email": { "type": "string", "description": "The user's email address." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user profile was created." }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "HighScore": {
+      "title": "High Score",
+      "description": "A player's high score record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the player." },
+        "displayName": { "type": "string", "description": "The player's display name." },
+        "photoURL": { "type": "string", "description": "The player's profile picture URL." },
+        "score": { "type": "integer", "description": "The high score achieved." },
+        "level": { "type": "integer", "description": "The level reached." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the high score was last updated." }
+      },
+      "required": ["uid", "displayName", "score"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Collection of user profiles."
+    },
+    "/highscores/{uid}": {
+      "schema": "HighScore",
+      "description": "Collection of global high scores, indexed by user UID."
+    }
+  }
+}
