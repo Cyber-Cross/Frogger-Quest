@@ -39,7 +39,7 @@ function cn(...inputs: ClassValue[]) {
 
 // --- Constants ---
 const GRID_WIDTH = 20;
-const TILE_SIZE = 35; // px
+const TILE_SIZE = 32; // px
 const INITIAL_LIVES = 3;
 const SPEED_INCREMENT_THRESHOLD = 3; // Level up every 3 points for faster progression
 
@@ -326,7 +326,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
  * AuthBar component handles user login/logout and profile display.
  */
 const AuthBar = React.memo(({ user, onLogin, onLogout }: { user: User | null; onLogin: () => void; onLogout: () => void }) => (
-  <div className="w-full max-w-xl flex justify-between items-center mb-4 px-4 py-2 bg-stone-900/50 rounded-2xl border border-white/5">
+  <div className="w-full max-w-2xl flex justify-between items-center mb-4 px-4 py-2 bg-stone-900/50 rounded-2xl border border-white/5">
     {user ? (
       <div className="flex items-center gap-3">
         <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-emerald-500/30" />
@@ -691,8 +691,9 @@ function Game() {
     // 1. Update obstacles
     const nextObstacles = obstaclesRef.current.map(obs => {
       let newX = obs.x + obs.speed * dtFactor;
-      if (newX > GRID_WIDTH) newX = -3;
-      if (newX < -3) newX = GRID_WIDTH;
+      const width = obs.type === 'log' ? 3 : 1;
+      if (newX > GRID_WIDTH) newX = -width;
+      if (newX < -width) newX = GRID_WIDTH;
       return { ...obs, x: newX };
     });
     setObstacles(nextObstacles);
@@ -841,7 +842,7 @@ function Game() {
       <AuthBar user={user} onLogin={handleLogin} onLogout={handleLogout} />
 
       {/* Header */}
-      <div className="w-full max-w-xl flex justify-between items-end mb-6 px-4">
+      <div className="w-full max-w-2xl flex justify-between items-end mb-6 px-4">
         <div className="flex flex-col">
           <h1 className="text-2xl font-black tracking-tighter text-emerald-400 italic">FROGGER QUEST</h1>
           <div className="flex gap-4 items-center mt-1">
@@ -911,74 +912,80 @@ function Game() {
       </div>
 
       {/* Game Board */}
-      <div className="relative bg-stone-900 rounded-xl overflow-hidden shadow-2xl border border-stone-800">
+      <div className="relative bg-stone-900 rounded-2xl shadow-2xl border border-stone-800 min-h-[520px] flex items-center justify-center w-full max-w-[95vw] md:max-w-none overflow-x-auto">
         <div 
-          className="grid"
+          className="relative transition-all duration-500 shrink-0 overflow-hidden"
           style={{ 
             width: GRID_WIDTH * TILE_SIZE, 
             height: gridHeight * TILE_SIZE,
-            gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`,
-            gridTemplateRows: `repeat(${gridHeight}, 1fr)`
           }}
         >
-          {backgroundGrid}
+          <div 
+            className="grid absolute inset-0"
+            style={{ 
+              gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`,
+              gridTemplateRows: `repeat(${gridHeight}, 1fr)`
+            }}
+          >
+            {backgroundGrid}
+          </div>
+
+          {/* Obstacles */}
+          {obstacles.map(obs => (
+            <motion.div
+              key={obs.id}
+              className="absolute text-2xl flex items-center justify-center pointer-events-none"
+              style={{ 
+                width: obs.type === 'log' ? TILE_SIZE * 3 : TILE_SIZE, 
+                height: TILE_SIZE,
+                left: obs.x * TILE_SIZE,
+                top: obs.y * TILE_SIZE,
+                zIndex: 10,
+                // Center the emoji for logs
+                textAlign: 'center',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {obs.emoji}
+            </motion.div>
+          ))}
+
+          {/* Power-up (Heart) */}
+          {powerUp && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [1, 1.2, 1] }}
+              transition={{ repeat: Infinity, duration: 1.5 }}
+              className="absolute text-2xl flex items-center justify-center z-20"
+              style={{ 
+                width: TILE_SIZE, 
+                height: TILE_SIZE,
+                left: powerUp.x * TILE_SIZE,
+                top: powerUp.y * TILE_SIZE
+              }}
+            >
+              ❤️
+            </motion.div>
+          )}
+
+          {/* Frog */}
+          <motion.div
+            animate={{ 
+              left: frogPos.x * TILE_SIZE, 
+              top: frogPos.y * TILE_SIZE
+            }}
+            transition={{ 
+              // Use a very fast tween for movement to stay in sync with logs
+              // while still providing a tiny bit of smoothness for jumps.
+              left: { type: 'tween', ease: 'linear', duration: 0.02 },
+              top: { type: 'tween', ease: 'linear', duration: 0.02 }
+            }}
+            className="absolute text-3xl flex items-center justify-center z-30 pointer-events-none"
+            style={{ width: TILE_SIZE, height: TILE_SIZE }}
+          >
+            🐸
+          </motion.div>
         </div>
-
-        {/* Obstacles */}
-        {obstacles.map(obs => (
-          <motion.div
-            key={obs.id}
-            className="absolute text-2xl flex items-center justify-center pointer-events-none"
-            style={{ 
-              width: obs.type === 'log' ? TILE_SIZE * 3 : TILE_SIZE, 
-              height: TILE_SIZE,
-              left: obs.x * TILE_SIZE,
-              top: obs.y * TILE_SIZE,
-              zIndex: 10,
-              // Center the emoji for logs
-              textAlign: 'center',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {obs.emoji}
-          </motion.div>
-        ))}
-
-        {/* Power-up (Heart) */}
-        {powerUp && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
-            className="absolute text-2xl flex items-center justify-center z-20"
-            style={{ 
-              width: TILE_SIZE, 
-              height: TILE_SIZE,
-              left: powerUp.x * TILE_SIZE,
-              top: powerUp.y * TILE_SIZE
-            }}
-          >
-            ❤️
-          </motion.div>
-        )}
-
-        {/* Frog */}
-        <motion.div
-          animate={{ 
-            left: frogPos.x * TILE_SIZE, 
-            top: frogPos.y * TILE_SIZE
-          }}
-          transition={{ 
-            // Use a very fast tween for movement to stay in sync with logs
-            // while still providing a tiny bit of smoothness for jumps.
-            left: { type: 'tween', ease: 'linear', duration: 0.02 },
-            top: { type: 'tween', ease: 'linear', duration: 0.02 }
-          }}
-          className="absolute text-3xl flex items-center justify-center z-30 pointer-events-none"
-          style={{ width: TILE_SIZE, height: TILE_SIZE }}
-        >
-          🐸
-        </motion.div>
 
         {/* Overlays */}
         <AnimatePresence>
@@ -1001,14 +1008,15 @@ function Game() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 z-50 bg-stone-950/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center"
+              className="absolute inset-0 z-50 bg-stone-950/90 backdrop-blur-md overflow-y-auto"
             >
-              <div className="mb-6 p-4 bg-emerald-500/20 rounded-full">
-                <Play size={48} className="text-emerald-400 ml-1" />
-              </div>
-              <h2 className="text-3xl font-black mb-2 tracking-tighter italic text-emerald-400">FROGGER QUEST</h2>
-              
-              {showInfo ? (
+              <div className="min-h-full flex flex-col items-center justify-center p-8 text-center">
+                <div className="mb-6 p-4 bg-emerald-500/20 rounded-full shrink-0">
+                  <Play size={48} className="text-emerald-400 ml-1" />
+                </div>
+                <h2 className="text-3xl font-black mb-2 tracking-tighter italic text-emerald-400 shrink-0">FROGGER QUEST</h2>
+                
+                {showInfo ? (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1089,7 +1097,8 @@ function Game() {
                   </button>
                 </div>
               )}
-            </motion.div>
+            </div>
+          </motion.div>
           )}
 
           {gameState === 'gameover' && (
