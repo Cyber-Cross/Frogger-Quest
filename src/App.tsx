@@ -9,6 +9,24 @@ import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Heart, Star, Trophy, Play, R
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
+// Project Imports
+import { 
+  Position, 
+  LaneType, 
+  Obstacle, 
+  PowerUp, 
+  LeaderboardEntry 
+} from './types';
+import { 
+  GRID_WIDTH, 
+  TILE_SIZE, 
+  INITIAL_LIVES, 
+  SPEED_INCREMENT_THRESHOLD, 
+  getLaneConfig, 
+  SOUNDS 
+} from './constants';
+import { CanvasBoard } from './components/CanvasBoard';
+
 // Firebase Imports
 import { 
   auth, 
@@ -37,198 +55,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- Constants ---
-const GRID_WIDTH = 20;
-const TILE_SIZE = 32; // px
-const INITIAL_LIVES = 3;
-const SPEED_INCREMENT_THRESHOLD = 3; // Level up every 3 points for faster progression
-
-// --- Types ---
-type Position = { x: number; y: number };
-type LaneType = 'goal' | 'river' | 'safe' | 'road' | 'start';
-type Obstacle = { id: string; x: number; y: number; speed: number; type: 'car' | 'log'; emoji: string };
-type PowerUp = { x: number; y: number; type: 'heart'; active: boolean };
-type LeaderboardEntry = { uid: string; displayName: string; score: number; photoURL?: string };
-
-/**
- * Generates the lane configuration based on the current level.
- * Difficulty increases by adding more lanes and changing their distribution.
- */
-const getLaneConfig = (level: number): LaneType[] => {
-  // Stable lane growth:
-  // Level 1-4: 2 river, 3 road (Total 8)
-  // Level 5-9: 3 river, 4 road (Total 10)
-  // Level 10+: 4 river, 5 road (Total 12)
-  const riverLanes = level >= 10 ? 4 : (level >= 5 ? 3 : 2);
-  const roadLanes = level >= 10 ? 5 : (level >= 5 ? 4 : 3);
-  
-  const lanes: LaneType[] = [];
-  lanes.push('goal');
-  for (let i = 0; i < riverLanes; i++) lanes.push('river');
-  lanes.push('safe');
-  for (let i = 0; i < roadLanes; i++) lanes.push('road');
-  lanes.push('start');
-  
-  return lanes;
-};
+import { AuthProvider, useAuth } from './components/AuthProvider';
+import { soundManager } from './services/SoundManager';
+import { Leaderboard } from './components/Leaderboard';
 
 // --- Sound System ---
-const SOUNDS = {
-  jump: 'jump',
-  collision: 'collision',
-  win: 'win',
-  powerup: 'powerup',
-  levelup: 'levelup'
-};
+// SoundManager is now in src/services/SoundManager.ts
 
-/**
- * SoundManager handles audio synthesis using the Web Audio API.
- * This provides zero-dependency, low-latency sounds that work reliably in sandboxed environments.
- */
-class SoundManager {
-  private static instance: SoundManager;
-  private audioContext: AudioContext | null = null;
-  private isMuted: boolean = false;
-  private isUnlocked: boolean = false;
-
-  private constructor() {}
-
-  /**
-   * Singleton pattern to ensure only one SoundManager exists.
-   */
-  static getInstance() {
-    if (!SoundManager.instance) {
-      SoundManager.instance = new SoundManager();
-    }
-    return SoundManager.instance;
-  }
-
-  /**
-   * Toggles the mute state.
-   */
-  setMuted(muted: boolean) {
-    this.isMuted = muted;
-  }
-
-  /**
-   * Initializes and resumes the AudioContext.
-   * Must be called in response to a user gesture (click/keypress).
-   */
-  async unlock() {
-    if (this.isUnlocked) return;
-    
-    try {
-      if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      
-      if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-      }
-
-      // Play a silent buffer to fully "prime" the audio engine
-      const buffer = this.audioContext.createBuffer(1, 1, 22050);
-      const source = this.audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.audioContext.destination);
-      source.start(0);
-      
-      this.isUnlocked = true;
-    } catch (err) {
-      console.error('Audio unlock failed:', err);
-    }
-  }
-
-  /**
-   * Synthesizes a sound effect based on the provided key.
-   * @param key The sound effect to play.
-   * @param volume The volume level (0.0 to 1.0).
-   */
-  play(key: keyof typeof SOUNDS, volume: number = 0.5) {
-    if (this.isMuted) return;
-    
-    // Lazy initialization of context
-    if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-
-    const ctx = this.audioContext;
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
-    const time = ctx.currentTime;
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    
-    // Quick attack envelope to prevent clicking
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(volume, time + 0.01);
-
-    const osc = ctx.createOscillator();
-    osc.connect(gain);
-
-    switch (key) {
-      case 'jump':
-        // A short rising sine wave for a "boing" effect
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(150, time);
-        osc.frequency.exponentialRampToValueAtTime(600, time + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
-        osc.start(time);
-        osc.stop(time + 0.15);
-        break;
-      case 'collision':
-        // A low-frequency square wave for a "thud"
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(100, time);
-        osc.frequency.exponentialRampToValueAtTime(40, time + 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
-        osc.start(time);
-        osc.stop(time + 0.3);
-        break;
-      case 'win':
-        // A happy arpeggio
-        osc.type = 'triangle';
-        [440, 554, 659, 880].forEach((freq, i) => {
-          const noteTime = time + i * 0.1;
-          osc.frequency.setValueAtTime(freq, noteTime);
-        });
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
-        osc.start(time);
-        osc.stop(time + 0.5);
-        break;
-      case 'powerup':
-        // A fast rising sawtooth for a "zing"
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, time);
-        osc.frequency.exponentialRampToValueAtTime(1200, time + 0.2);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
-        osc.start(time);
-        osc.stop(time + 0.3);
-        break;
-      case 'levelup':
-        // A triumphant fanfare
-        osc.type = 'square';
-        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-          const noteTime = time + i * 0.1;
-          osc.frequency.setValueAtTime(freq, noteTime);
-        });
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.6);
-        osc.start(time);
-        osc.stop(time + 0.6);
-        break;
-    }
-  }
-}
-
-const soundManager = SoundManager.getInstance();
-
-const playJumpSound = () => soundManager.play('jump', 0.3);
-const playCollisionSound = () => soundManager.play('collision', 0.5);
-const playWinSound = () => soundManager.play('win', 0.4);
-const playPowerUpSound = () => soundManager.play('powerup', 0.4);
-const playLevelUpSound = () => soundManager.play('levelup', 0.5);
+const playJumpSound = () => soundManager.play('jump');
+const playCollisionSound = () => soundManager.play('collision');
+const playWinSound = () => soundManager.play('win');
+const playPowerUpSound = () => soundManager.play('powerup');
+const playLevelUpSound = () => soundManager.play('levelup');
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps {
@@ -283,42 +121,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 // --- Auth Context ---
-const AuthContext = createContext<{ user: User | null; loading: boolean }>({ user: null, loading: true });
-
-function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-      if (u) {
-        // Sync user profile to Firestore
-        const userRef = doc(db, 'users', u.uid);
-        getDoc(userRef).then((docSnap) => {
-          if (!docSnap.exists()) {
-            setDoc(userRef, {
-              uid: u.uid,
-              displayName: u.displayName || 'Anonymous',
-              photoURL: u.photoURL || '',
-              email: u.email || '',
-              createdAt: serverTimestamp()
-            }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${u.uid}`));
-          } else {
-            updateDoc(userRef, {
-              displayName: u.displayName || 'Anonymous',
-              photoURL: u.photoURL || '',
-              email: u.email || ''
-            }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${u.uid}`));
-          }
-        });
-      }
-    });
-  }, []);
-
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;
-}
+// AuthProvider is now in src/components/AuthProvider.tsx
 
 // --- Components ---
 
@@ -357,24 +160,14 @@ const AuthBar = React.memo(({ user, onLogin, onLogout }: { user: User | null; on
 /**
  * Leaderboard component displays the top scores.
  */
-const Leaderboard = React.memo(({ entries }: { entries: LeaderboardEntry[] }) => (
+const LeaderboardSection: React.FC = () => (
   <div className="w-full max-w-[240px] space-y-2">
-    <h3 className="text-[10px] text-stone-500 uppercase font-bold tracking-widest mb-3">Global Top 5</h3>
-    {entries.map((entry, i) => (
-      <div key={entry.uid} className="flex items-center justify-between bg-white/5 p-2 rounded-xl border border-white/5">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-stone-600 w-3">{i + 1}</span>
-          <img src={entry.photoURL || ''} alt="" className="w-5 h-5 rounded-full opacity-80" />
-          <span className="text-[10px] font-bold truncate max-w-[80px]">{entry.displayName}</span>
-        </div>
-        <span className="text-[10px] font-mono text-emerald-400 font-bold">{entry.score}</span>
-      </div>
-    ))}
+    <Leaderboard />
   </div>
-));
+);
 
 function Game() {
-  const { user, loading: authLoading } = useContext(AuthContext);
+  const { user, loading: authLoading } = useAuth();
   
   // --- Game State ---
   const [gameState, setGameState] = useState<'start' | 'playing' | 'gameover'>('start');
@@ -389,7 +182,6 @@ function Game() {
   const [personalBest, setPersonalBest] = useState(0);
   const [powerUp, setPowerUp] = useState<PowerUp | null>(null);
   const [obstacles, setObstacles] = useState<Obstacle[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [muted, setMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
@@ -414,7 +206,7 @@ function Game() {
 
   // Sync muted state to global helper
   useEffect(() => {
-    soundManager.setMuted(muted);
+    soundManager.setEnabled(!muted);
   }, [muted]);
 
   // Fullscreen change listener
@@ -438,21 +230,6 @@ function Game() {
     }
   };
 
-  // Unlock audio on first interaction
-  useEffect(() => {
-    const handleInteraction = () => {
-      soundManager.unlock();
-      window.removeEventListener('click', handleInteraction);
-      window.removeEventListener('keydown', handleInteraction);
-    };
-    window.addEventListener('click', handleInteraction);
-    window.addEventListener('keydown', handleInteraction);
-    return () => {
-      window.removeEventListener('click', handleInteraction);
-      window.removeEventListener('keydown', handleInteraction);
-    };
-  }, []);
-
   // Refs for animation loop
   const requestRef = useRef<number>(null);
   const lastTimeRef = useRef<number>(0);
@@ -468,16 +245,6 @@ function Game() {
         setPersonalBest(snap.data().score);
       }
     }).catch(err => handleFirestoreError(err, OperationType.GET, `highscores/${user.uid}`));
-
-    // Listen to global leaderboard
-    const q = query(collection(db, 'highscores'), orderBy('score', 'desc'), limit(5));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const entries: LeaderboardEntry[] = [];
-      snap.forEach(doc => entries.push(doc.data() as LeaderboardEntry));
-      setLeaderboard(entries);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'highscores'));
-
-    return () => unsubscribe();
   }, [user]);
 
   const saveHighScore = useCallback(async (finalScore: number) => {
@@ -782,36 +549,6 @@ function Game() {
   // Collision logic moved into game loop for better synchronization
 
   // --- Render Helpers ---
-  /**
-   * Determines the background color for a specific row based on its type (River, Road, Goal, etc.)
-   */
-  const getRowColor = (y: number) => {
-    const type = laneConfig[y];
-    switch (type) {
-      case 'goal': return 'bg-emerald-500/20';
-      case 'river': return 'bg-sky-500/30';
-      case 'safe': return 'bg-stone-500/20';
-      case 'road': return 'bg-slate-800/40';
-      case 'start': return 'bg-green-600/20';
-      default: return 'bg-transparent';
-    }
-  };
-
-  /**
-   * Memoized background grid to prevent unnecessary re-renders of the static board structure.
-   */
-  const backgroundGrid = React.useMemo(() => {
-    return [...Array(GRID_WIDTH * gridHeight)].map((_, i) => {
-      const y = Math.floor(i / GRID_WIDTH);
-      return (
-        <div 
-          key={i} 
-          className={cn("border-[0.5px] border-white/5", getRowColor(y))}
-        />
-      );
-    });
-  }, [gridHeight, laneConfig]);
-
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -923,71 +660,12 @@ function Game() {
             height: gridHeight * TILE_SIZE,
           }}
         >
-          <div 
-            className="grid absolute inset-0"
-            style={{ 
-              gridTemplateColumns: `repeat(${GRID_WIDTH}, 1fr)`,
-              gridTemplateRows: `repeat(${gridHeight}, 1fr)`
-            }}
-          >
-            {backgroundGrid}
-          </div>
-
-          {/* Obstacles */}
-          {obstacles.map(obs => (
-            <motion.div
-              key={obs.id}
-              className="absolute text-2xl flex items-center justify-center pointer-events-none"
-              style={{ 
-                width: obs.type === 'log' ? TILE_SIZE * 3 : TILE_SIZE, 
-                height: TILE_SIZE,
-                left: obs.x * TILE_SIZE,
-                top: obs.y * TILE_SIZE,
-                zIndex: 10,
-                // Center the emoji for logs
-                textAlign: 'center',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {obs.emoji}
-            </motion.div>
-          ))}
-
-          {/* Power-up (Heart) */}
-          {powerUp && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-              className="absolute text-2xl flex items-center justify-center z-20"
-              style={{ 
-                width: TILE_SIZE, 
-                height: TILE_SIZE,
-                left: powerUp.x * TILE_SIZE,
-                top: powerUp.y * TILE_SIZE
-              }}
-            >
-              ❤️
-            </motion.div>
-          )}
-
-          {/* Frog */}
-          <motion.div
-            animate={{ 
-              left: frogPos.x * TILE_SIZE, 
-              top: frogPos.y * TILE_SIZE
-            }}
-            transition={{ 
-              // Use a very fast tween for movement to stay in sync with logs
-              // while still providing a tiny bit of smoothness for jumps.
-              left: { type: 'tween', ease: 'linear', duration: 0.02 },
-              top: { type: 'tween', ease: 'linear', duration: 0.02 }
-            }}
-            className="absolute text-3xl flex items-center justify-center z-30 pointer-events-none"
-            style={{ width: TILE_SIZE, height: TILE_SIZE }}
-          >
-            🐸
-          </motion.div>
+          <CanvasBoard 
+            laneConfig={laneConfig}
+            obstacles={obstacles}
+            frogPos={frogPos}
+            powerUp={powerUp}
+          />
         </div>
 
         {/* Overlays */}
@@ -1057,7 +735,7 @@ function Game() {
                   className="flex flex-col items-center w-full"
                 >
                   <div className="mb-6">
-                    <Leaderboard entries={leaderboard} />
+                    <Leaderboard />
                   </div>
                   <button 
                     onClick={() => setShowLeaderboard(false)}
@@ -1090,7 +768,6 @@ function Game() {
                   </div>
                   <button 
                     onClick={() => {
-                      soundManager.unlock();
                       playJumpSound();
                     }}
                     className="w-full bg-stone-900/50 hover:bg-stone-800 text-stone-400 hover:text-white font-bold py-2 px-4 rounded-full transition-all active:scale-95 border border-white/5 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest"
@@ -1127,7 +804,7 @@ function Game() {
 
               {/* Leaderboard */}
               <div className="w-full flex justify-center mb-8">
-                <Leaderboard entries={leaderboard} />
+                <Leaderboard />
               </div>
 
               <div className="flex gap-3">

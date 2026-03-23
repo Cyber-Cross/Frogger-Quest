@@ -2,35 +2,26 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, orderBy, limit, onSnapshot, getDocFromServer, Timestamp } from 'firebase/firestore';
 
-// Firebase configuration from environment variables
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID,
-};
-
-// Check for missing configuration
-const missingKeys = Object.entries(firebaseConfig)
-  .filter(([key, value]) => !value && key !== 'measurementId')
-  .map(([key]) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}`);
-
-if (missingKeys.length > 0) {
-  console.error(
-    "Firebase configuration is missing the following environment variables:\n" +
-    missingKeys.join("\n") +
-    "\n\nPlease add these to your AI Studio Settings > Secrets."
-  );
-}
+// Import the Firebase configuration
+import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
+// Use the firestoreDatabaseId from the config if it exists
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Check for placeholder values
+const isPlaceholder = (val: string) => val.startsWith('PLACEHOLDER_');
+const hasPlaceholders = Object.values(firebaseConfig).some(val => typeof val === 'string' && isPlaceholder(val));
+
+if (hasPlaceholders) {
+  console.error(
+    "Firebase configuration contains placeholder values. " +
+    "Please complete the Firebase setup in the AI Studio UI to enable database features."
+  );
+}
 
 // --- Error Handling ---
 export enum OperationType {

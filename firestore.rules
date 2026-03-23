@@ -92,7 +92,7 @@ service cloud.firestore {
     }
 
     match /highscores/{userId} {
-      allow read: if true; // Leaderboard is public
+      allow read: if isAuthenticated(); // Leaderboard requires login
       allow create: if isOwner(userId) && isValidHighScore(request.resource.data);
       allow update: if isOwner(userId) && isValidHighScore(request.resource.data) &&
                       request.resource.data.uid == resource.data.uid &&
